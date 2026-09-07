@@ -1,0 +1,43 @@
+FROM n8nio/n8n:2.36.9
+
+USER root
+
+# ============================================================================
+# V2.0 — patch n8n 2.36 isLeader / OnLeaderTakeover bug (issue #34038)
+# ============================================================================
+# Bug: n8n 2.36 community edition never calls `markAsLeader()`, so
+# `isLeader` is always false. This causes:
+#   - `shouldAddNonWebhookTriggers()` returns false (skips scheduleTrigger)
+#   - `ScheduledTaskManager.register()` returns false (no cron registration)
+# Workaround: force instanceRole to 'leader' at startup + skip isLeader
+# checks in two methods.
+#
+# Apply patches idempotently; safe to re-build.
+# ============================================================================
+
+# 1. Patch InstanceSettings constructor to set instanceRole='leader'
+RUN sed -i "s|this.instanceRole = 'unset';|this.instanceRole = 'leader';|" \
+    /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core*/node_modules/n8n-core/dist/instance-settings/instance-settings.js 2>/dev/null || true
+
+# 2. Patch ActiveWorkflowManager.shouldAddNonWebhookTriggers() — always true
+RUN find /usr/local/lib/node_modules/n8n -name "active-workflow-manager.js" -exec sed -i \
+    "s|    shouldAddNonWebhookTriggers() {|    shouldAddNonWebhookTriggers() { return true; } /* PATCHED V2.0 */\n    _original_shouldAddNonWebhookTriggers() {|" \
+    {} \;
+
+# 3. Patch ScheduledTaskManager.register() — skip isLeader check
+RUN find /usr/local/lib/node_modules/n8n -name "scheduled-task-manager.js" -exec \
+    sed -i "s|        if (!this.instanceSettings.isLeader) {|        if (false /* PATCHED V2.0: skip isLeader */) {|" {} \;
+
+# Verify patches applied
+RUN echo "=== V2.0 patch verification ===" && \
+    grep -l "PATCHED V2.0" /usr/local/lib/node_modules/n8n/dist/active-workflow-manager.js && \
+    grep -c "if (false" /usr/local/lib/node_modules/n8n/node_modules/.pnpm/n8n-core*/node_modules/n8n-core/dist/execution-engine/scheduled-task-manager.js && \
+    echo "=== patches applied OK ===" || \
+    (echo "=== patch verification FAILED ===" && exit 1)
+
+# Restore non-root user for security
+USER node
+
+LABEL org.opencontainers.image.source="https://github.com/your-org/temu-workflow"
+LABEL org.opencontainers.image.description="Temu Workflow n8n with V2.0 isLeader patch (issue #34038)"
+LABEL org.opencontainers.image.licenses="Internal use only"
