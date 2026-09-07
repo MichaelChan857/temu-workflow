@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业务看板 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .stat-card-value.lg { font-size: 28px; }
+  .health-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 12px;
+    font-size: 11px;
+  }
+  .health-pill.online { background: #e8f9eb; color: #00b42a; }
+  .health-pill.offline { background: #ffeded; color: #f56565; }
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #00b42a;
+    animation: pulse-anim 2s infinite;
+  }
+  @keyframes pulse-anim {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .quick-link {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 4px;
+    color: #3370ff; text-decoration: none;
+    font-size: 12px;
+  }
+  .quick-link:hover { background: #f0f5ff; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item active">
+      <span class="sidebar-item-icon">📊</span>业务看板
+    </a>
+    <a href="review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">✓</span>一审工作台
+      <span class="sidebar-item-badge" id="badge-first-review">0</span>
+    </a>
+    <a href="listings.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📝</span>资料编辑
+    </a>
+    <a href="second-review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔍</span>二审工作台
+    </a>
+    <a href="publish.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🚀</span>发布监控
+      <span class="sidebar-item-badge" id="badge-to-publish">0</span>
+    </a>
+
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔔</span>告警中心
+      <span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span>
+    </a>
+    <a href="config.html" class="sidebar-item">
+      <span class="sidebar-item-icon">⚙️</span>系统配置
+    </a>
+    <a href="data-sources.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔌</span>数据源管理
+    </a>
+
+    <div class="sidebar-section">V2.0 业务闭环</div>
+    <a href="calibration.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📈</span>模型校准
+    </a>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div>
+        <div class="sidebar-user-name" id="user-name">--</div>
+        <div class="sidebar-user-role" id="user-role">--</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <div class="main">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>首页</span>
+        <span style="margin:0 8px">/</span>
+        <span class="topbar-breadcrumb-current">业务看板</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search">
+        <span>🔍</span>
+        <input type="text" placeholder="搜索商品 / SKU / 批次 ID" />
+      </div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'" title="告警">
+        🔔
+        <span class="topbar-badge" id="topbar-alert-badge">0</span>
+      </div>
+      <div class="topbar-user" onclick="logout()">
+        <div class="topbar-user-avatar" id="topbar-avatar">A</div>
+      </div>
+    </header>
+
+    <!-- 内容 -->
+    <main class="content">
+      <!-- 顶部指标 -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-card-label">今日批次</div>
+          <div class="stat-card-value lg" id="stat-batches">--</div>
+          <div class="stat-card-suffix">批次</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">导入候选</div>
+          <div class="stat-card-value lg" id="stat-imported">--</div>
+          <div class="stat-card-suffix"><span class="trend-up">↑</span> 较昨日</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">待一审</div>
+          <div class="stat-card-value lg text-primary" id="stat-first-review">--</div>
+          <div class="stat-card-suffix">待运营处理</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">待发布</div>
+          <div class="stat-card-value lg text-warning" id="stat-to-publish">--</div>
+          <div class="stat-card-suffix">冻结快照</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">今日发布成功</div>
+          <div class="stat-card-value lg text-success" id="stat-published">--</div>
+          <div class="stat-card-suffix">/ 总发布</div>
+        </div>
+      </div>
+
+      <!-- 系统状态 + 转化漏斗 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">今日转化漏斗</div>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <span class="health-pill online" id="health-pill">
+              <span class="pulse-dot"></span>系统在线
+            </span>
+          </div>
+        </div>
+        <div class="panel-body has-padding">
+          <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;">
+            <div>
+              <div style="font-size: 12px; color: #86909c; margin-bottom: 4px;">📥 导入</div>
+              <div style="font-size: 20px; font-weight: 600;" id="funnel-imported">--</div>
+              <div class="progress mt-2"><div class="progress-bar" id="bar-imported" style="width: 100%"></div></div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #86909c; margin-bottom: 4px;">✓ 评分通过</div>
+              <div style="font-size: 20px; font-weight: 600;" id="funnel-scored">--</div>
+              <div class="progress mt-2"><div class="progress-bar" id="bar-scored" style="width: 80%"></div></div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #86909c; margin-bottom: 4px;">📋 待一审</div>
+              <div style="font-size: 20px; font-weight: 600;" id="funnel-first-review">--</div>
+              <div class="progress mt-2"><div class="progress-bar" id="bar-first-review" style="width: 60%"></div></div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #86909c; margin-bottom: 4px;">📝 资料编辑</div>
+              <div style="font-size: 20px; font-weight: 600;" id="funnel-editing">--</div>
+              <div class="progress mt-2"><div class="progress-bar" id="bar-editing" style="width: 40%"></div></div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #86909c; margin-bottom: 4px;">🔍 待二审</div>
+              <div style="font-size: 20px; font-weight: 600;" id="funnel-second-review">--</div>
+              <div class="progress mt-2"><div class="progress-bar" id="bar-second-review" style="width: 30%"></div></div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #86909c; margin-bottom: 4px;">🚀 已发布</div>
+              <div style="font-size: 20px; font-weight: 600; color: #00b42a;" id="funnel-published">--</div>
+              <div class="progress mt-2"><div class="progress-bar success" id="bar-published" style="width: 20%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 最新候选 + 最新告警 并列 -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px;">
+        <!-- 最新候选 -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">最新候选（按分数降序）</div>
+            <a href="review.html" class="quick-link">查看全部 →</a>
+          </div>
+          <div class="panel-toolbar">
+            <input type="text" placeholder="搜索标题 / SKU" />
+            <select>
+              <option>全部状态</option>
+              <option>待一审</option>
+              <option>已通过</option>
+            </select>
+          </div>
+          <div style="overflow-x: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 32px;"><input type="checkbox" /></th>
+                  <th>商品标题</th>
+                  <th>分类</th>
+                  <th style="text-align: right;">价格</th>
+                  <th style="text-align: right;">分数</th>
+                  <th>置信度</th>
+                  <th>状态</th>
+                  <th>导入时间</th>
+                </tr>
+              </thead>
+              <tbody id="candidates-tbody">
+                <tr><td colspan="7" style="text-align: center; color: #86909c; padding: 32px;">加载中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 最新告警 -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">最新告警</div>
+            <a href="alerts.html" class="quick-link">查看全部 →</a>
+          </div>
+          <div class="panel-body" id="alerts-tbody" style="padding: 0;">
+            <div style="padding: 32px; text-align: center; color: #86909c;">加载中...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 最新批次 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">最新批次</div>
+          <span class="text-muted" style="font-size: 12px;" id="batch-info">--</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>批次 ID</th>
+                <th>业务日期</th>
+                <th style="text-align: right;">导入</th>
+                <th style="text-align: right;">有效</th>
+                <th style="text-align: right;">去重</th>
+                <th style="text-align: right;">淘汰</th>
+                <th style="text-align: right;">已评分</th>
+                <th style="text-align: right;">推荐</th>
+                <th>状态</th>
+                <th>开始时间</th>
+              </tr>
+            </thead>
+            <tbody id="batch-tbody">
+              <tr><td colspan="9" style="text-align: center; color: #86909c; padding: 32px;">暂无批次</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+
+function logout() {
+  localStorage.clear();
+  window.location.href = '/ui/login.html';
+}
+
+async function api(path) {
+  if (!token) {
+    window.location.href = '/ui/login.html';
+    return;
+  }
+  const r = await fetch(API + path, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function loadAll() {
+  try {
+    // 健康检查
+    await fetch(API + '/');
+    document.getElementById('health-pill').className = 'health-pill online';
+    document.getElementById('health-pill').innerHTML = '<span class="pulse-dot"></span>系统在线';
+  } catch {
+    document.getElementById('health-pill').className = 'health-pill offline';
+    document.getElementById('health-pill').innerHTML = '<span class="pulse-dot" style="background:#f56565"></span>系统离线';
+  }
+
+  // 数据加载
+  const [candidates, listings, batches, alerts] = await Promise.all([
+    api('/api/v1/candidates?limit=200'),
+    api('/api/v1/listings?limit=200'),
+    api('/api/v1/batches'),
+    api('/api/v1/alerts'),
+  ]);
+
+  // 指标卡
+  document.getElementById('stat-batches').textContent = batches?.length || 0;
+  document.getElementById('stat-imported').textContent = candidates?.length || 0;
+  document.getElementById('stat-first-review').textContent = candidates?.filter(c => c.status === 'first_review').length || 0;
+  document.getElementById('stat-to-publish').textContent = listings?.filter(l => l.status === 'ready_to_publish').length || 0;
+  document.getElementById('stat-published').textContent = listings?.filter(l => l.status === 'published').length || 0;
+
+  // 侧边栏徽章
+  document.getElementById('badge-first-review').textContent = candidates?.filter(c => c.status === 'first_review').length || 0;
+  document.getElementById('badge-to-publish').textContent = listings?.filter(l => l.status === 'ready_to_publish').length || 0;
+  const errorAlerts = alerts?.filter(a => a.level === 'error').length || 0;
+  document.getElementById('badge-alerts').textContent = errorAlerts;
+  document.getElementById('topbar-alert-badge').textContent = errorAlerts;
+  document.getElementById('topbar-alert-badge').style.display = errorAlerts > 0 ? 'block' : 'none';
+
+  // 漏斗
+  const funnel = {
+    imported: candidates?.length || 0,
+    scored: candidates?.filter(c => c.total_score).length || 0,
+    firstReview: candidates?.filter(c => c.status === 'first_review').length || 0,
+    editing: listings?.filter(l => l.status === 'editing').length || 0,
+    secondReview: listings?.filter(l => l.status === 'second_review').length || 0,
+    published: listings?.filter(l => l.status === 'published').length || 0,
+  };
+  document.getElementById('funnel-imported').textContent = funnel.imported;
+  document.getElementById('funnel-scored').textContent = funnel.scored;
+  document.getElementById('funnel-first-review').textContent = funnel.firstReview;
+  document.getElementById('funnel-editing').textContent = funnel.editing;
+  document.getElementById('funnel-second-review').textContent = funnel.secondReview;
+  document.getElementById('funnel-published').textContent = funnel.published;
+
+  // 候选表格
+  const ctbody = document.getElementById('candidates-tbody');
+  const candidates_to_show = candidates?.slice(0, 10) || [];
+  if (candidates_to_show.length === 0) {
+    ctbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #86909c; padding: 32px;">暂无候选</td></tr>';
+  } else {
+    ctbody.innerHTML = candidates_to_show.map(c => {
+      const statusMap = {
+        'first_review': '<span class="tag tag-primary">待一审</span>',
+        'content_generating': '<span class="tag tag-info">资料生成中</span>',
+        'editing': '<span class="tag tag-default">编辑中</span>',
+        'second_review': '<span class="tag tag-warning">待二审</span>',
+        'ready_to_publish': '<span class="tag tag-warning">待发布</span>',
+        'publishing': '<span class="tag tag-info">发布中</span>',
+        'published': '<span class="tag tag-success">已发布</span>',
+        'rejected_1': '<span class="tag tag-danger">一审驳回</span>',
+        'rejected_2': '<span class="tag tag-danger">二审驳回</span>',
+        'not_selected': '<span class="tag tag-default">未入选</span>',
+      };
+      const status = statusMap[c.status] || `<span class="tag tag-default">${c.status}</span>`;
+      return `
+        <tr>
+          <td><input type="checkbox" /></td>
+          <td><a href="review.html?id=${c.id}" style="color:#1f2329;text-decoration:none;">${c.title || '(无标题)'}</a></td>
+          <td>${c.category || '-'}</td>
+          <td class="num" style="text-align: right;">$${c.price?.toFixed(2) || '0.00'}</td>
+          <td class="num" style="text-align: right; font-weight: 600; color: ${c.total_score >= 75 ? '#00b42a' : c.total_score >= 60 ? '#ff7d00' : '#f56565'};">${c.total_score?.toFixed(1) || '-'}</td>
+          <td>${c.confidence ? Math.round(c.confidence * 100) + '%' : '-'}</td>
+          <td>${status}</td>
+          <td class="text-muted">${new Date(c.created_at).toLocaleString('zh-CN')}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // 告警列表
+  const atbody = document.getElementById('alerts-tbody');
+  const alerts_to_show = alerts?.slice(0, 5) || [];
+  if (alerts_to_show.length === 0) {
+    atbody.innerHTML = '<div style="padding: 32px; text-align: center; color: #86909c;">✓ 暂无告警</div>';
+  } else {
+    atbody.innerHTML = alerts_to_show.map(a => {
+      const colorMap = { error: '#f56565', warning: '#ff7d00', info: '#3370ff' };
+      return `
+        <div style="padding: 12px 16px; border-bottom: 1px solid #f5f7fa; cursor: pointer;" onclick="location.href='alerts.html'">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span class="tag" style="background: ${colorMap[a.level]}20; color: ${colorMap[a.level]};">${a.level.toUpperCase()}</span>
+            <span style="font-size: 11px; color: #86909c;">${new Date(a.created_at).toLocaleTimeString('zh-CN')}</span>
+          </div>
+          <div style="font-size: 13px; color: #1f2329;">${a.title}</div>
+          ${a.message ? `<div style="font-size: 11px; color: #86909c; margin-top: 2px;">${a.message}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // 批次表格
+  const btbody = document.getElementById('batch-tbody');
+  if (batches?.length > 0) {
+    const b = batches[0];
+    const s = b.statistics || {};
+    btbody.innerHTML = `
+      <tr>
+        <td class="num">${b.id.substring(0, 8)}...<span class="text-muted">${b.id.substring(8, 16)}</span></td>
+        <td>${b.business_date}</td>
+        <td class="num" style="text-align: right;">${s.imported || 0}</td>
+        <td class="num" style="text-align: right;">${s.valid || 0}</td>
+        <td class="num" style="text-align: right;">${s.deduped || 0}</td>
+        <td class="num" style="text-align: right; color: #f56565;">${s.filtered_out || 0}</td>
+        <td class="num" style="text-align: right;">${s.scored || 0}</td>
+        <td class="num" style="text-align: right; color: #00b42a; font-weight: 600;">${s.recommended || 0}</td>
+        <td><span class="tag ${b.status === 'success' ? 'tag-success' : 'tag-warning'}">${b.status === 'success' ? '已完成' : '进行中'}</span></td>
+        <td class="text-muted">${new Date(b.started_at).toLocaleString('zh-CN')}</td>
+      </tr>
+    `;
+    document.getElementById('batch-info').textContent = `${batches.length} 个批次`;
+  }
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadAll();
+setInterval(loadAll, 15000);  // 每 15s 刷新
+</script>
+</body>
+</html>

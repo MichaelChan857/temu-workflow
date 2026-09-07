@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>二审工作台 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .main-content { display: flex; height: calc(100vh - 56px); }
+  .list-pane { width: 50%; border-right: 1px solid #e5e7eb; overflow-y: auto; background: #fff; }
+  .detail-pane { flex: 1; overflow-y: auto; background: #fafbfc; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item"><span class="sidebar-item-icon">📊</span>业务看板</a>
+    <a href="review.html" class="sidebar-item"><span class="sidebar-item-icon">✓</span>一审工作台<span class="sidebar-item-badge" id="badge-first-review">0</span></a>
+    <a href="listings.html" class="sidebar-item"><span class="sidebar-item-icon">📝</span>资料编辑</a>
+    <a href="second-review.html" class="sidebar-item active"><span class="sidebar-item-icon">🔍</span>二审工作台</a>
+    <a href="publish.html" class="sidebar-item"><span class="sidebar-item-icon">🚀</span>发布监控<span class="sidebar-item-badge" id="badge-to-publish">0</span></a>
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item"><span class="sidebar-item-icon">🔔</span>告警中心<span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span></a>
+    <a href="config.html" class="sidebar-item"><span class="sidebar-item-icon">⚙️</span>系统配置</a>
+    <a href="data-sources.html" class="sidebar-item"><span class="sidebar-item-icon">🔌</span>数据源管理</a>
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div><div class="sidebar-user-name" id="user-name">--</div><div class="sidebar-user-role" id="user-role">--</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-breadcrumb"><span>主要功能</span><span style="margin:0 8px">/</span><span class="topbar-breadcrumb-current">二审工作台</span></div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search"><span>🔍</span><input type="text" placeholder="搜索 Listing" /></div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()"><div class="topbar-user-avatar" id="topbar-avatar">A</div></div>
+    </header>
+
+    <div class="main-content">
+      <div class="list-pane">
+        <div style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; background: #fafbfc; display: flex; gap: 8px;">
+          <select id="filter-status" style="height: 28px; padding: 0 10px; border: 1px solid #c9cdd4; border-radius: 4px; font-size: 12px;">
+            <option value="">全部状态</option>
+            <option value="editing" selected>编辑中</option>
+            <option value="second_review">待二审</option>
+            <option value="ready_to_publish">待发布</option>
+          </select>
+          <button class="btn btn-default btn-sm" onclick="loadListings()">🔄 刷新</button>
+        </div>
+        <div id="listings-list"></div>
+      </div>
+
+      <div class="detail-pane" id="detail-pane">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #86909c;">
+          <div style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">👈</div>
+          <div>从左侧选择 Listing 进入二审</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+let listings = [];
+let selectedId = null;
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+const STATUS = {
+  editing: '<span class="tag tag-default">编辑中</span>',
+  second_review: '<span class="tag tag-warning">待二审</span>',
+  ready_to_publish: '<span class="tag tag-primary">待发布</span>',
+  publishing: '<span class="tag tag-info">发布中</span>',
+  published: '<span class="tag tag-success">已发布</span>',
+};
+
+async function loadListings() {
+  listings = await api('/api/v1/listings?limit=100') || [];
+  const status = document.getElementById('filter-status').value;
+  const filtered = status ? listings.filter(l => l.status === status) : listings;
+
+  const list = document.getElementById('listings-list');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding: 32px; text-align: center; color: #86909c;">暂无 Listing</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(l => `
+    <div class="candidate-row" style="padding: 12px 16px; border-bottom: 1px solid #f5f7fa; cursor: pointer; ${selectedId === l.id ? 'background: #e8f1ff;' : ''}" onclick="selectListing('${l.id}')">
+      <div class="candidate-info" style="flex: 1;">
+        <div style="font-size: 13px; font-weight: 500; margin-bottom: 4px;">${l.title || '(无标题)'}</div>
+        <div style="display: flex; gap: 8px; font-size: 11px; color: #86909c;">
+          ${STATUS[l.status] || '<span class="tag">' + l.status + '</span>'}
+          <span>v${l.version}</span>
+          <span>${l.is_ai_generated ? '🤖 AI' : '手工'}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectListing(id) {
+  selectedId = id;
+  loadListings();
+
+  const detail = await api(`/api/v1/listings/${id}/second-review`);
+  const l = detail.listing;
+  const c = detail.checks;
+
+  const errorTags = (c.errors || []).map(e => `<div style="font-size: 12px; color: #f56565; padding: 2px 0;">✗ ${e}</div>`).join('');
+  const warnTags = (c.warnings || []).map(w => `<div style="font-size: 12px; color: #ff7d00; padding: 2px 0;">⚠ ${w}</div>`).join('');
+
+  const panel = document.getElementById('detail-pane');
+  panel.innerHTML = `
+    <div style="padding: 16px 20px; border-bottom: 1px solid #e5e7eb; background: #fff;">
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${l.title || '(无标题)'}</div>
+      <div style="display: flex; gap: 12px; font-size: 12px; color: #86909c;">
+        <span>v${l.version}</span>
+        ${l.has_snapshot ? '<span class="tag tag-success">已冻结</span>' : '<span class="tag tag-default">未冻结</span>'}
+      </div>
+    </div>
+
+    ${errorTags || warnTags ? `
+      <div style="padding: 16px 20px; background: #fff; border-bottom: 1px solid #f5f7fa;">
+        <div style="font-size: 12px; font-weight: 600; color: #4e5969; margin-bottom: 8px;">校验结果</div>
+        ${errorTags}
+        ${warnTags}
+      </div>
+    ` : ''}
+
+    <div style="padding: 16px 20px; background: #fff; border-bottom: 1px solid #f5f7fa;">
+      <div style="font-size: 12px; font-weight: 600; color: #4e5969; margin-bottom: 12px;">商品信息</div>
+      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px; font-size: 12px;">
+        <span style="color: #86909c;">分类</span><span>${l.category_id || '-'}</span>
+        <span style="color: #86909c;">图片</span><span>${(l.image_urls || []).length} 张</span>
+      </div>
+      <div style="margin-top: 12px; font-size: 13px; line-height: 1.6;">${l.description || '<span style="color: #86909c;">(无描述)</span>'}</div>
+    </div>
+
+    ${c.warnings && c.warnings.length > 0 ? `
+      <div style="padding: 16px 20px; background: #fff;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <input type="checkbox" id="confirm-warnings" />
+          我已知晓警告项（${c.warnings.join('; ')}），仍确认通过
+        </label>
+      </div>
+    ` : ''}
+
+    <div style="padding: 16px 20px; background: #fff; border-top: 1px solid #e5e7eb; position: sticky; bottom: 0; display: flex; gap: 8px;">
+      <button class="btn btn-primary" onclick="approve('${id}')" ${c.errors && c.errors.length > 0 ? 'disabled' : ''}>✓ 通过 + 冻结快照</button>
+      <button class="btn btn-danger" onclick="reject('${id}')">✗ 驳回</button>
+      <button class="btn btn-default" onclick="returnBack('${id}')">↩ 退回修改</button>
+    </div>
+  `;
+}
+
+async function approve(id) {
+  const confirmWarn = document.getElementById('confirm-warnings')?.checked || false;
+  try {
+    const res = await api(`/api/v1/listings/${id}/second-review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve', confirm_warnings: confirmWarn, comment: '通过' }),
+    });
+    alert('✓ ' + (res.detail || '已通过'));
+    loadListings();
+    selectedId = null;
+    document.getElementById('detail-pane').innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #86909c;"><div style="font-size: 48px; margin-bottom: 12px;">✓</div><div>已通过</div></div>';
+  } catch (e) {
+    alert('❌ ' + e.message);
+  }
+}
+
+async function reject(id) {
+  const reason = prompt('驳回原因（必填）：');
+  if (!reason) return;
+  await api(`/api/v1/listings/${id}/second-review`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'reject', reason_code: reason, comment: reason }),
+  });
+  alert('✓ 已驳回');
+  loadListings();
+  selectedId = null;
+}
+
+async function returnBack(id) {
+  const reason = prompt('退回原因（必填）：');
+  if (!reason) return;
+  await api(`/api/v1/listings/${id}/second-review`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'return', reason_code: reason, comment: reason }),
+  });
+  alert('✓ 已退回');
+  loadListings();
+  selectedId = null;
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadListings();
+setInterval(loadListings, 15000);
+</script>
+</body>
+</html>

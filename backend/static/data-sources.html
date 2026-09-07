@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据源管理 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item"><span class="sidebar-item-icon">📊</span>业务看板</a>
+    <a href="review.html" class="sidebar-item"><span class="sidebar-item-icon">✓</span>一审工作台<span class="sidebar-item-badge" id="badge-first-review">0</span></a>
+    <a href="listings.html" class="sidebar-item"><span class="sidebar-item-icon">📝</span>资料编辑</a>
+    <a href="second-review.html" class="sidebar-item"><span class="sidebar-item-icon">🔍</span>二审工作台</a>
+    <a href="publish.html" class="sidebar-item"><span class="sidebar-item-icon">🚀</span>发布监控<span class="sidebar-item-badge" id="badge-to-publish">0</span></a>
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item"><span class="sidebar-item-icon">🔔</span>告警中心<span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span></a>
+    <a href="config.html" class="sidebar-item"><span class="sidebar-item-icon">⚙️</span>系统配置</a>
+    <a href="data-sources.html" class="sidebar-item active"><span class="sidebar-item-icon">🔌</span>数据源管理</a>
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div><div class="sidebar-user-name" id="user-name">--</div><div class="sidebar-user-role" id="user-role">--</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-breadcrumb"><span>运维</span><span style="margin:0 8px">/</span><span class="topbar-breadcrumb-current">数据源管理</span></div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search"><span>🔍</span><input type="text" placeholder="搜索数据源" /></div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()"><div class="topbar-user-avatar" id="topbar-avatar">A</div></div>
+    </header>
+
+    <main class="content">
+      <div class="page-header">
+        <div>
+          <div class="page-title">数据源管理</div>
+          <div class="page-subtitle">支持 CSV / XLSX / HTTP API / 内部库 / 第三方 · V1.1 新增通用 HTTP API</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" onclick="showAdd()">+ 添加数据源</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>类型</th>
+                <th>责任人</th>
+                <th>授权说明</th>
+                <th>状态</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="source-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null, user = null;
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+async function loadSources() {
+  const sources = await api('/api/v1/data-sources') || [];
+  const tbody = document.getElementById('source-tbody');
+  if (sources.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #86909c; padding: 32px;">暂无数据源 · 点击右上角添加</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sources.map(s => `
+    <tr>
+      <td><strong>${s.name}</strong></td>
+      <td><span class="tag tag-default">${s.type}</span></td>
+      <td>${s.owner}</td>
+      <td class="text-muted">${s.authorization_note || '-'}</td>
+      <td><span class="tag ${s.is_active ? 'tag-success' : 'tag-default'}">${s.is_active ? '启用' : '停用'}</span></td>
+      <td class="text-muted" style="font-size: 11px;">${new Date(s.created_at).toLocaleDateString('zh-CN')}</td>
+      <td class="actions">
+        <a href="#" onclick="checkHealth('${s.id}')">健康检查</a>
+        <a href="#" onclick="toggleSource('${s.id}', ${!s.is_active})">${s.is_active ? '停用' : '启用'}</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function showAdd() {
+  const name = prompt('数据源名称（如：主商品库）:');
+  if (!name) return;
+  const type = prompt('类型（csv / xlsx / http_api / internal_api）:', 'csv');
+  if (!type) return;
+  const auth = prompt('授权说明（必填）：', '内部商品库授权使用');
+  if (!auth) return;
+  const configStr = prompt('配置（JSON 格式）：', '{"file_path":"/data/products.csv"}');
+  if (!configStr) return;
+  let config;
+  try { config = JSON.parse(configStr); } catch { alert('JSON 格式错误'); return; }
+
+  api('/api/v1/data-sources', {
+    method: 'POST',
+    body: JSON.stringify({ name, type, owner: user.username, authorization_note: auth, config_ref: config }),
+  }).then(() => {
+    alert('✓ 已添加');
+    loadSources();
+  });
+}
+
+async function checkHealth(id) {
+  const r = await api(`/api/v1/data-sources/${id}/health`);
+  alert(`${r.data_source_id.substring(0, 8)}...\n健康：${r.healthy ? '✓ 是' : '✗ 否'}\n${r.error || ''}`);
+}
+
+function toggleSource(id, activate) {
+  alert(`切换 ${activate ? '启用' : '停用'} 端点预留`);
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadSources();
+setInterval(loadSources, 15000);
+</script>
+</body>
+</html>

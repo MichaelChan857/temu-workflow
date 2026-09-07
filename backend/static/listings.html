@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资料编辑 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item"><span class="sidebar-item-icon">📊</span>业务看板</a>
+    <a href="review.html" class="sidebar-item"><span class="sidebar-item-icon">✓</span>一审工作台<span class="sidebar-item-badge" id="badge-first-review">0</span></a>
+    <a href="listings.html" class="sidebar-item active"><span class="sidebar-item-icon">📝</span>资料编辑</a>
+    <a href="second-review.html" class="sidebar-item"><span class="sidebar-item-icon">🔍</span>二审工作台</a>
+    <a href="publish.html" class="sidebar-item"><span class="sidebar-item-icon">🚀</span>发布监控<span class="sidebar-item-badge" id="badge-to-publish">0</span></a>
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item"><span class="sidebar-item-icon">🔔</span>告警中心<span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span></a>
+    <a href="config.html" class="sidebar-item"><span class="sidebar-item-icon">⚙️</span>系统配置</a>
+    <a href="data-sources.html" class="sidebar-item"><span class="sidebar-item-icon">🔌</span>数据源管理</a>
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div><div class="sidebar-user-name" id="user-name">--</div><div class="sidebar-user-role" id="user-role">--</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-breadcrumb"><span>主要功能</span><span style="margin:0 8px">/</span><span class="topbar-breadcrumb-current">资料编辑</span></div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search"><span>🔍</span><input type="text" placeholder="搜索 Listing / 标题" id="search" /></div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()"><div class="topbar-user-avatar" id="topbar-avatar">A</div></div>
+    </header>
+
+    <main class="content">
+      <div class="page-header">
+        <div>
+          <div class="page-title">资料编辑</div>
+          <div class="page-subtitle">通过一审的候选 → AI 生成标题/卖点/描述 → 人工编辑 → 进入二审</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-default" onclick="loadListings()">🔄 刷新</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-toolbar">
+          <select id="filter-status">
+            <option value="">全部状态</option>
+            <option value="editing">编辑中</option>
+            <option value="second_review">待二审</option>
+            <option value="ready_to_publish">待发布</option>
+          </select>
+          <input type="text" placeholder="搜索标题" id="search-text" />
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>标题</th>
+                <th>状态</th>
+                <th style="text-align: center;">版本</th>
+                <th style="text-align: center;">AI 生成</th>
+                <th>更新</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="listings-tbody">
+              <tr><td colspan="6" style="text-align: center; color: #86909c; padding: 32px;">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+const STATUS = {
+  editing: '<span class="tag tag-default">编辑中</span>',
+  second_review: '<span class="tag tag-warning">待二审</span>',
+  ready_to_publish: '<span class="tag tag-primary">待发布</span>',
+  publishing: '<span class="tag tag-info">发布中</span>',
+  published: '<span class="tag tag-success">已发布</span>',
+  rejected_2: '<span class="tag tag-danger">已驳回</span>',
+};
+
+async function loadListings() {
+  const listings = await api('/api/v1/listings?limit=100') || [];
+  const status = document.getElementById('filter-status').value;
+  const search = document.getElementById('search-text')?.value?.toLowerCase() || '';
+  const filtered = listings.filter(l => (!status || l.status === status) && (!search || l.title?.toLowerCase().includes(search)));
+
+  document.getElementById('badge-to-publish').textContent = listings.filter(l => l.status === 'ready_to_publish').length;
+
+  const tbody = document.getElementById('listings-tbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #86909c; padding: 32px;">暂无 Listing</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(l => `
+    <tr>
+      <td><a href="/listings/${l.id}" style="color: #1f2329; text-decoration: none;">${l.title || '(无标题)'}</a></td>
+      <td>${STATUS[l.status] || `<span class="tag">${l.status}</span>`}</td>
+      <td class="num" style="text-align: center;">v${l.version}</td>
+      <td style="text-align: center;">${l.is_ai_generated ? '<span class="tag tag-info">🤖 AI</span>' : '<span class="tag tag-default">手工</span>'}</td>
+      <td class="text-muted" style="font-size: 11px;">${new Date(l.updated_at).toLocaleString('zh-CN')}</td>
+      <td class="actions">
+        <a href="/listings/${l.id}">编辑</a>
+        <a href="#" onclick="event.preventDefault(); viewVersions('${l.id}')">版本</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function viewVersions(id) {
+  window.open(`/listings/${id}`, '_blank');
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadListings();
+setInterval(loadListings, 15000);
+
+document.getElementById('filter-status')?.addEventListener('change', loadListings);
+document.getElementById('search-text')?.addEventListener('input', loadListings);
+</script>
+</body>
+</html>

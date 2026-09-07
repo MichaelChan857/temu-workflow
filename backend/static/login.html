@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body { background: #fff; min-height: 100vh; }
+  .login-wrap { display: flex; min-height: 100vh; }
+  .login-left {
+    flex: 1;
+    background: linear-gradient(135deg, #1e54c8 0%, #3370ff 50%, #5b8def 100%);
+    color: #fff;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 60px 80px;
+    position: relative; overflow: hidden;
+  }
+  .login-left::before, .login-left::after {
+    content: ''; position: absolute; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .login-left::before { width: 300px; height: 300px; top: -100px; right: -100px; }
+  .login-left::after { width: 400px; height: 400px; bottom: -150px; left: -150px; }
+
+  .brand-block { position: relative; z-index: 1; max-width: 480px; }
+  .brand-logo {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; background: rgba(255, 255, 255, 0.15);
+    border-radius: 6px; backdrop-filter: blur(10px);
+    margin-bottom: 32px; font-weight: 600;
+  }
+  .brand-logo-icon {
+    width: 28px; height: 28px; background: #fff;
+    color: #3370ff; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .brand-headline { font-size: 36px; font-weight: 600; line-height: 1.3; margin-bottom: 16px; }
+  .brand-sub { font-size: 15px; line-height: 1.6; opacity: 0.85; margin-bottom: 32px; }
+  .brand-features { display: flex; gap: 32px; }
+  .brand-feat {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px; padding: 12px 16px;
+    backdrop-filter: blur(10px);
+  }
+  .brand-feat-num {
+    font-size: 24px; font-weight: 700; line-height: 1;
+    font-family: -apple-system, "SF Pro Display", sans-serif;
+  }
+  .brand-feat-label { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+
+  .login-right {
+    width: 480px; flex-shrink: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 60px 80px;
+  }
+
+  .login-title { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+  .login-sub { font-size: 13px; color: #86909c; margin-bottom: 32px; }
+
+  .login-form-group { margin-bottom: 20px; }
+  .login-form-label {
+    display: block; font-size: 12px; color: #4e5969;
+    margin-bottom: 6px; font-weight: 500;
+  }
+  .login-form-input {
+    width: 100%; height: 40px; padding: 0 12px;
+    border: 1px solid #c9cdd4; border-radius: 4px;
+    font-size: 13px; transition: all 0.15s;
+    background: #fff;
+  }
+  .login-form-input:focus {
+    outline: none; border-color: #3370ff;
+    box-shadow: 0 0 0 3px rgba(51, 112, 255, 0.1);
+  }
+  .login-form-btn {
+    width: 100%; height: 44px;
+    background: #3370ff; color: #fff;
+    border: none; border-radius: 4px;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .login-form-btn:hover { background: #2860e6; }
+  .login-form-btn:disabled { background: #94c2ff; cursor: not-allowed; }
+
+  .login-error {
+    background: #ffeded; color: #f56565;
+    padding: 10px 14px; border-radius: 4px;
+    font-size: 12px; margin-bottom: 16px;
+    display: none;
+  }
+
+  .login-quick {
+    margin-top: 24px; padding-top: 20px;
+    border-top: 1px solid #f0f1f3;
+  }
+  .login-quick-title {
+    font-size: 11px; color: #86909c;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+  .login-quick-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .login-quick-card {
+    border: 1px solid #e5e7eb; border-radius: 4px;
+    padding: 10px 8px; cursor: pointer;
+    text-align: center; transition: all 0.15s;
+  }
+  .login-quick-card:hover {
+    border-color: #3370ff;
+    background: #f0f5ff;
+  }
+  .login-quick-card-name {
+    font-size: 12px; font-weight: 500; color: #1f2329;
+  }
+  .login-quick-card-role {
+    font-size: 10px; color: #86909c; margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <!-- 左侧品牌区 -->
+  <div class="login-left">
+    <div class="brand-block">
+      <div class="brand-logo">
+        <div class="brand-logo-icon">T</div>
+        Temu Workflow
+      </div>
+      <div class="brand-headline">自动选品<br/>让上品更高效</div>
+      <div class="brand-sub">
+        每天定时导入候选商品<br/>
+        AI 评分 + 人工审核 + 一键发布到 Temu
+      </div>
+      <div class="brand-features">
+        <div class="brand-feat">
+          <div class="brand-feat-num">93+</div>
+          <div class="brand-feat-label">功能需求</div>
+        </div>
+        <div class="brand-feat">
+          <div class="brand-feat-num">15</div>
+          <div class="brand-feat-label">验收用例</div>
+        </div>
+        <div class="brand-feat">
+          <div class="brand-feat-num">8800+</div>
+          <div class="brand-feat-label">代码行数</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右侧登录区 -->
+  <div class="login-right">
+    <div class="login-title">欢迎登录</div>
+    <div class="login-sub">使用您的账号访问 Temu Workflow 系统</div>
+
+    <div class="login-error" id="error"></div>
+
+    <form id="login-form">
+      <div class="login-form-group">
+        <label class="login-form-label">用户名</label>
+        <input id="username" class="login-form-input" type="text" required
+               placeholder="admin / operator / editor / reviewer / publisher / readonly" />
+      </div>
+      <div class="login-form-group">
+        <label class="login-form-label">密码</label>
+        <input id="password" class="login-form-input" type="password" required value="admin123" />
+      </div>
+      <button type="submit" class="login-form-btn" id="submit-btn">登录</button>
+    </form>
+
+    <div class="login-quick">
+      <div class="login-quick-title">演示账号（一键登录）</div>
+      <div class="login-quick-grid">
+        <div class="login-quick-card" onclick="quickLogin('admin')">
+          <div class="login-quick-card-name">系统管理员</div>
+          <div class="login-quick-card-role">admin</div>
+        </div>
+        <div class="login-quick-card" onclick="quickLogin('operator')">
+          <div class="login-quick-card-name">选品运营</div>
+          <div class="login-quick-card-role">operator</div>
+        </div>
+        <div class="login-quick-card" onclick="quickLogin('editor')">
+          <div class="login-quick-card-name">商品编辑</div>
+          <div class="login-quick-card-role">editor</div>
+        </div>
+        <div class="login-quick-card" onclick="quickLogin('reviewer')">
+          <div class="login-quick-card-name">上品审核</div>
+          <div class="login-quick-card-role">reviewer</div>
+        </div>
+        <div class="login-quick-card" onclick="quickLogin('publisher')">
+          <div class="login-quick-card-name">发布操作</div>
+          <div class="login-quick-card-role">publisher</div>
+        </div>
+        <div class="login-quick-card" onclick="quickLogin('readonly')">
+          <div class="login-quick-card-name">只读验收</div>
+          <div class="login-quick-card-role">readonly</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+
+async function doLogin(username, password) {
+  const btn = document.getElementById('submit-btn');
+  const err = document.getElementById('error');
+  err.style.display = 'none';
+  btn.textContent = '登录中...';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch(API + '/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({ detail: '登录失败' }));
+      throw new Error(body.detail);
+    }
+    const data = await r.json();
+    localStorage.setItem('temu_token', data.access_token);
+    localStorage.setItem('temu_user', JSON.stringify(data.user));
+    window.location.href = '/ui/dashboard.html';
+  } catch (e) {
+    err.textContent = '✗ ' + e.message;
+    err.style.display = 'block';
+    btn.textContent = '登录';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', e => {
+  e.preventDefault();
+  doLogin(
+    document.getElementById('username').value.trim(),
+    document.getElementById('password').value
+  );
+});
+
+function quickLogin(role) {
+  document.getElementById('username').value = role;
+  doLogin(role, 'admin123');
+}
+
+if (localStorage.getItem('temu_token')) {
+  window.location.href = '/ui/dashboard.html';
+}
+</script>
+</body>
+</html>

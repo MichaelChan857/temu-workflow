@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>发布监控 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<div class="layout">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📊</span>业务看板
+    </a>
+    <a href="review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">✓</span>一审工作台
+      <span class="sidebar-item-badge" id="badge-first-review">0</span>
+    </a>
+    <a href="listings.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📝</span>资料编辑
+    </a>
+    <a href="second-review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔍</span>二审工作台
+    </a>
+    <a href="publish.html" class="sidebar-item active">
+      <span class="sidebar-item-icon">🚀</span>发布监控
+      <span class="sidebar-item-badge" id="badge-to-publish">0</span>
+    </a>
+
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔔</span>告警中心
+      <span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span>
+    </a>
+    <a href="config.html" class="sidebar-item">
+      <span class="sidebar-item-icon">⚙️</span>系统配置
+    </a>
+    <a href="data-sources.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔌</span>数据源管理
+    </a>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div>
+        <div class="sidebar-user-name" id="user-name">--</div>
+        <div class="sidebar-user-role" id="user-role">--</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>主要功能</span>
+        <span style="margin:0 8px">/</span>
+        <span class="topbar-breadcrumb-current">发布监控</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search">
+        <span>🔍</span>
+        <input type="text" placeholder="搜索 Listing ID / 标题" />
+      </div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()">
+        <div class="topbar-user-avatar" id="topbar-avatar">A</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- 顶部统计 -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-card-label">总 Listing</div>
+          <div class="stat-card-value" id="stat-total">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">待发布</div>
+          <div class="stat-card-value text-warning" id="stat-pending">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">发布中</div>
+          <div class="stat-card-value text-primary" id="stat-publishing">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">已发布</div>
+          <div class="stat-card-value text-success" id="stat-published">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">发布失败</div>
+          <div class="stat-card-value text-danger" id="stat-failed">--</div>
+        </div>
+      </div>
+
+      <!-- 主表格 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">发布任务</div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-success btn-sm" onclick="batchPublishAll()">🚀 一键全部发布</button>
+            <button class="btn btn-default btn-sm" onclick="loadAll()">🔄 刷新</button>
+          </div>
+        </div>
+        <div class="panel-toolbar">
+          <select id="filter-status">
+            <option value="">全部状态</option>
+            <option value="ready_to_publish">待发布</option>
+            <option value="publishing">发布中</option>
+            <option value="platform_reviewing">平台审核中</option>
+            <option value="published">已发布</option>
+            <option value="publish_failed">发布失败</option>
+          </select>
+          <input type="text" placeholder="搜索标题" id="search" />
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 40px;"><input type="checkbox" id="check-all" /></th>
+                <th>Listing 标题</th>
+                <th>状态</th>
+                <th>进度</th>
+                <th>尝试次数</th>
+                <th>幂等键</th>
+                <th>错误</th>
+                <th>快照</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="publish-tbody">
+              <tr><td colspan="10" style="text-align: center; color: #86909c; padding: 32px;">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 操作日志时间线 -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">操作日志时间线</div>
+        </div>
+        <div class="panel-body has-padding" id="timeline-tbody">
+          <div style="text-align: center; color: #86909c; padding: 16px;">暂无操作记录</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+let listings = [];
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+const STATUS = {
+  published: '<span class="tag tag-success">已发布</span>',
+  publishing: '<span class="tag tag-info">发布中</span>',
+  platform_reviewing: '<span class="tag tag-info">平台审核中</span>',
+  ready_to_publish: '<span class="tag tag-warning">待发布</span>',
+  publish_failed: '<span class="tag tag-danger">失败</span>',
+  editing: '<span class="tag tag-default">编辑中</span>',
+  rejected_2: '<span class="tag tag-danger">已驳回</span>',
+};
+
+const PROGRESS = {
+  published: 100,
+  platform_reviewing: 90,
+  publishing: 60,
+  ready_to_publish: 30,
+  publish_failed: 100,
+  editing: 20,
+};
+
+async function loadAll() {
+  listings = await api('/api/v1/listings?limit=100') || [];
+  document.getElementById('stat-total').textContent = listings.length;
+  document.getElementById('stat-pending').textContent = listings.filter(l => l.status === 'ready_to_publish').length;
+  document.getElementById('stat-publishing').textContent = listings.filter(l => ['publishing', 'platform_reviewing'].includes(l.status)).length;
+  document.getElementById('stat-published').textContent = listings.filter(l => l.status === 'published').length;
+  document.getElementById('stat-failed').textContent = listings.filter(l => l.status === 'publish_failed').length;
+
+  document.getElementById('badge-to-publish').textContent = listings.filter(l => l.status === 'ready_to_publish').length;
+
+  render();
+}
+
+function render() {
+  const status = document.getElementById('filter-status').value;
+  const search = document.getElementById('search')?.value?.toLowerCase() || '';
+  const filtered = listings.filter(l =>
+    (!status || l.status === status) &&
+    (!search || l.title?.toLowerCase().includes(search))
+  );
+
+  const tbody = document.getElementById('publish-tbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #86909c; padding: 32px;">暂无任务</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(l => {
+    const progress = PROGRESS[l.status] || 0;
+    const progressClass = l.status === 'publish_failed' ? 'danger' : (l.status === 'published' ? 'success' : '');
+    return `
+      <tr>
+        <td><input type="checkbox" /></td>
+        <td>
+          <a href="second-review.html?id=${l.id}" style="color:#1f2329;text-decoration:none;">${l.title || '(无标题)'}</a>
+          <div style="font-size: 11px; color: #86909c; margin-top: 2px;">ID: ${l.id.substring(0, 8)}... · v${l.version}</div>
+        </td>
+        <td>${STATUS[l.status] || `<span class="tag">${l.status}</span>`}</td>
+        <td>
+          <div style="width: 100px;">
+            <div class="progress"><div class="progress-bar ${progressClass}" style="width: ${progress}%;"></div></div>
+            <div style="font-size: 10px; color: #86909c; margin-top: 2px;">${progress}%</div>
+          </div>
+        </td>
+        <td class="num" style="text-align: center;">${l.status === 'published' ? '1' : l.status === 'publish_failed' ? '3+' : '-'}</td>
+        <td class="num" style="font-size: 11px; color: #86909c;">${l.idempotency_key ? l.idempotency_key.substring(0, 8) + '...' : '-'}</td>
+        <td>${l.last_error ? `<span style="color:#f56565;font-size:11px;">${l.last_error}</span>` : '-'}</td>
+        <td>${l.has_snapshot ? '<span class="tag tag-success">已冻结</span>' : '<span class="tag tag-default">未冻结</span>'}</td>
+        <td class="text-muted" style="font-size: 11px;">${new Date(l.updated_at).toLocaleString('zh-CN')}</td>
+        <td class="actions">
+          ${l.status === 'ready_to_publish' ? `<a href="#" onclick="quickPublish('${l.id}')">🚀 发布</a>` : ''}
+          ${l.status === 'publish_failed' ? `<a href="#" onclick="retryPublish('${l.id}')">↻ 重试</a>` : ''}
+          <a href="#" onclick="viewDetail('${l.id}')">详情</a>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function quickPublish(id) {
+  if (!confirm('确认发布到 Temu？')) return;
+  try {
+    await api('/api/v1/publish/start', {
+      method: 'POST',
+      body: JSON.stringify({ listing_id: id, auto_execute: true }),
+    });
+    alert('✓ 已发起发布');
+    loadAll();
+  } catch (e) { alert('❌ ' + e.message); }
+}
+
+async function batchPublishAll() {
+  if (!confirm('一键发布所有待发布 listing？')) return;
+  const ready = listings.filter(l => l.status === 'ready_to_publish');
+  let ok = 0, fail = 0;
+  for (const l of ready) {
+    try {
+      await api('/api/v1/publish/start', {
+        method: 'POST',
+        body: JSON.stringify({ listing_id: l.id, auto_execute: true }),
+      });
+      ok++;
+    } catch { fail++; }
+  }
+  alert(`✓ 批量发布完成\n成功 ${ok}，失败 ${fail}`);
+  loadAll();
+}
+
+async function retryPublish(id) {
+  await api(`/api/v1/publish/jobs/${id}/retry`, { method: 'POST' });
+  alert('✓ 已发起重试');
+  loadAll();
+}
+
+function viewDetail(id) {
+  window.location.href = `/second-review.html?id=${id}`;
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadAll();
+setInterval(loadAll, 10000);
+
+document.getElementById('filter-status')?.addEventListener('change', render);
+document.getElementById('search')?.addEventListener('input', render);
+</script>
+</body>
+</html>

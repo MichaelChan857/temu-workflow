@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一审工作台 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .main-content { display: flex; height: calc(100vh - 56px); }
+  .list-pane { width: 60%; border-right: 1px solid #e5e7eb; overflow-y: auto; background: #fff; }
+  .detail-pane { flex: 1; overflow-y: auto; background: #fafbfc; }
+
+  .list-toolbar {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex; gap: 8px; align-items: center;
+    background: #fafbfc;
+  }
+
+  .list-toolbar input,
+  .list-toolbar select {
+    height: 28px; padding: 0 10px;
+    border: 1px solid #c9cdd4; border-radius: 4px;
+    background: #fff; font-size: 12px;
+  }
+
+  .candidate-row {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f5f7fa;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .candidate-row:hover { background: #fafbfc; }
+  .candidate-row.selected { background: #e8f1ff; }
+
+  .candidate-checkbox { flex-shrink: 0; }
+  .candidate-thumb {
+    width: 48px; height: 48px; border-radius: 4px;
+    background: #f0f1f3; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #86909c; font-size: 11px;
+    overflow: hidden;
+  }
+  .candidate-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+  .candidate-info { flex: 1; min-width: 0; }
+  .candidate-title {
+    font-size: 13px; font-weight: 500; color: #1f2329;
+    margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .candidate-meta {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: #86909c;
+  }
+
+  .detail-empty {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 100%; color: #86909c;
+  }
+  .detail-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+
+  .detail-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fff;
+  }
+  .detail-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .detail-meta { display: flex; gap: 12px; font-size: 12px; color: #86909c; }
+
+  .detail-section {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f5f7fa;
+    background: #fff;
+  }
+  .detail-section-title {
+    font-size: 12px; font-weight: 600; color: #4e5969;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+
+  .score-bar { margin-bottom: 10px; }
+  .score-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+  .score-bar-name { color: #4e5969; }
+  .score-bar-value { font-weight: 600; font-family: monospace; }
+
+  .detail-actions {
+    padding: 16px 20px;
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    position: sticky; bottom: 0;
+    display: flex; gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📊</span>业务看板
+    </a>
+    <a href="review.html" class="sidebar-item active">
+      <span class="sidebar-item-icon">✓</span>一审工作台
+      <span class="sidebar-item-badge" id="badge-first-review">0</span>
+    </a>
+    <a href="listings.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📝</span>资料编辑
+    </a>
+    <a href="second-review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔍</span>二审工作台
+    </a>
+    <a href="publish.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🚀</span>发布监控
+      <span class="sidebar-item-badge" id="badge-to-publish">0</span>
+    </a>
+
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔔</span>告警中心
+      <span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span>
+    </a>
+    <a href="config.html" class="sidebar-item">
+      <span class="sidebar-item-icon">⚙️</span>系统配置
+    </a>
+    <a href="data-sources.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔌</span>数据源管理
+    </a>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div>
+        <div class="sidebar-user-name" id="user-name">--</div>
+        <div class="sidebar-user-role" id="user-role">--</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>主要功能</span>
+        <span style="margin:0 8px">/</span>
+        <span class="topbar-breadcrumb-current">一审工作台</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search">
+        <span>🔍</span>
+        <input id="search" type="text" placeholder="搜索标题 / SKU / 分类" />
+      </div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'" title="告警">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()">
+        <div class="topbar-user-avatar" id="topbar-avatar">A</div>
+      </div>
+    </header>
+
+    <div class="main-content">
+      <!-- 左侧候选列表 -->
+      <div class="list-pane">
+        <div class="list-toolbar">
+          <input id="filter-text" type="text" placeholder="搜索标题 / SKU / 分类" />
+          <select id="filter-status">
+            <option value="">全部状态</option>
+            <option value="first_review" selected>待一审</option>
+            <option value="content_generating">资料生成中</option>
+            <option value="rejected_1">已驳回</option>
+          </select>
+          <div style="flex: 1;"></div>
+          <span style="font-size: 11px; color: #86909c;" id="selected-count">已选 0</span>
+          <button class="btn btn-default btn-sm" disabled id="batch-btn">批量通过</button>
+          <button class="btn btn-default btn-sm" onclick="loadCandidates()">🔄 刷新</button>
+        </div>
+        <div id="candidates-list">
+          <div style="padding: 32px; text-align: center; color: #86909c;">加载中...</div>
+        </div>
+      </div>
+
+      <!-- 右侧详情面板 -->
+      <div class="detail-pane" id="detail-pane">
+        <div class="detail-empty">
+          <div class="detail-empty-icon">👈</div>
+          <div>从左侧选择候选查看详情</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+let candidates = [];
+let selectedId = null;
+let selected = new Set();
+
+const DIM_NAMES = { heat: '市场热度', competition: '竞争程度', profit: '价格/利润', trend: '销量趋势', ratings: '评价质量', risk: '风险控制' };
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+async function loadCandidates() {
+  const status = document.getElementById('filter-status').value;
+  const list = await api(`/api/v1/candidates?${status ? 'status=' + status : ''}limit=100`);
+  candidates = list || [];
+
+  const badge = candidates.filter(c => c.status === 'first_review').length;
+  document.getElementById('badge-first-review').textContent = badge;
+
+  render();
+}
+
+function render() {
+  const search = document.getElementById('filter-text')?.value?.toLowerCase() || '';
+  const filtered = candidates.filter(c =>
+    !search || c.title?.toLowerCase().includes(search) || c.supplier_sku?.toLowerCase().includes(search) || c.category?.toLowerCase().includes(search)
+  );
+
+  const STATUS = {
+    'first_review': '<span class="tag tag-primary">待一审</span>',
+    'content_generating': '<span class="tag tag-info">资料生成中</span>',
+    'editing': '<span class="tag tag-default">编辑中</span>',
+    'second_review': '<span class="tag tag-warning">待二审</span>',
+    'ready_to_publish': '<span class="tag tag-warning">待发布</span>',
+    'publishing': '<span class="tag tag-info">发布中</span>',
+    'published': '<span class="tag tag-success">已发布</span>',
+    'rejected_1': '<span class="tag tag-danger">一审驳回</span>',
+    'rejected_2': '<span class="tag tag-danger">二审驳回</span>',
+    'not_selected': '<span class="tag tag-default">未入选</span>',
+  };
+
+  const list = document.getElementById('candidates-list');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="padding: 32px; text-align: center; color: #86909c;">暂无候选</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(c => `
+    <div class="candidate-row ${selectedId === c.id ? 'selected' : ''}" onclick="selectCandidate('${c.id}')">
+      <input type="checkbox" class="candidate-checkbox" onclick="event.stopPropagation(); toggleSelect('${c.id}')" ${selected.has(c.id) ? 'checked' : ''} />
+      <div class="candidate-thumb">${c.image_urls?.[0] ? `<img src="${c.image_urls[0]}" onerror="this.parentElement.textContent='无图'">` : '无图'}</div>
+      <div class="candidate-info">
+        <div class="candidate-title">${c.title || '(无标题)'}</div>
+        <div class="candidate-meta">
+          <span>${c.category || '-'}</span>
+          <span class="num">$${c.price?.toFixed(2) || '0.00'}</span>
+          ${c.total_score ? `<span class="num" style="color: ${c.total_score >= 75 ? '#00b42a' : c.total_score >= 60 ? '#ff7d00' : '#f56565'}; font-weight: 600;">${c.total_score.toFixed(1)} 分</span>` : ''}
+          ${STATUS[c.status] || `<span class="tag">${c.status}</span>`}
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('selected-count').textContent = `已选 ${selected.size}`;
+  document.getElementById('batch-btn').disabled = selected.size === 0;
+}
+
+function toggleSelect(id) {
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  render();
+  document.querySelectorAll('.candidate-row').forEach(row => {
+    if (row.textContent.includes(selectedId || '_NONE_')) {
+      // noop
+    }
+  });
+}
+
+async function selectCandidate(id) {
+  selectedId = id;
+  render();
+  const c = candidates.find(x => x.id === id);
+  if (!c) return;
+
+  // 取详情
+  const detail = await api(`/api/v1/candidates/${id}`);
+  const dims = detail.dimension_scores || {};
+  const panel = document.getElementById('detail-pane');
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div class="detail-title">${detail.title || '(无标题)'}</div>
+      <div class="detail-meta">
+        <span class="num">$${detail.price?.toFixed(2) || '0.00'}</span>
+        <span>·</span>
+        <span>${detail.category || '-'}</span>
+        <span>·</span>
+        <span>${detail.supplier_sku || '-'}</span>
+        <span style="margin-left: auto;">${c.total_score ? `<span class="num" style="color: ${c.total_score >= 75 ? '#00b42a' : c.total_score >= 60 ? '#ff7d00' : '#f56565'}; font-size: 16px; font-weight: 600;">${c.total_score.toFixed(1)}</span>` : '-'}<span class="text-muted" style="font-size: 11px; margin-left: 4px;">/ 100</span></span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          ${detail.image_urls?.[0] ? `<img src="${detail.image_urls[0]}" style="width: 100%; border-radius: 4px;" onerror="this.style.display='none'">` : '<div style="background: #f0f1f3; padding: 32px; text-align: center; color: #86909c; border-radius: 4px;">无图片</div>'}
+        </div>
+        <div>
+          <div style="font-size: 12px; font-weight: 600; color: #4e5969; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">6 维评分</div>
+          ${Object.entries(DIM_NAMES).map(([k, name]) => {
+            const v = dims[k] || 0;
+            const color = v >= 75 ? '#00b42a' : v >= 60 ? '#ff7d00' : '#f56565';
+            return `
+              <div class="score-bar">
+                <div class="score-bar-label">
+                  <span class="score-bar-name">${name}</span>
+                  <span class="score-bar-value" style="color: ${color}">${v.toFixed(1)}</span>
+                </div>
+                <div class="progress">
+                  <div class="progress-bar" style="width: ${v}%; background: ${color};"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${detail.risks?.length > 0 ? `
+      <div class="detail-section">
+        <div class="detail-section-title">⚠ 风险提示</div>
+        ${detail.risks.map(r => `<div style="font-size: 12px; color: #f56565; padding: 2px 0;">• ${r}</div>`).join('')}
+      </div>
+    ` : ''}
+
+    ${detail.data_gaps?.length > 0 ? `
+      <div class="detail-section">
+        <div class="detail-section-title">⚠ 数据缺失</div>
+        ${detail.data_gaps.map(g => `<div style="font-size: 12px; color: #ff7d00; padding: 2px 0;">• ${g}</div>`).join('')}
+      </div>
+    ` : ''}
+
+    <div class="detail-section">
+      <div class="detail-section-title">商品描述</div>
+      <div style="font-size: 13px; line-height: 1.6; color: #4e5969;">
+        ${detail.description || '<span class="text-muted">(无描述)</span>'}
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button class="btn btn-primary" onclick="quickApprove('${c.id}')">✓ 通过</button>
+      <button class="btn btn-danger" onclick="quickReject('${c.id}')">✗ 驳回</button>
+      <button class="btn btn-default" onclick="quickReturn('${c.id}')">↩ 退回</button>
+      <div style="flex: 1;"></div>
+      <button class="btn btn-text btn-sm" onclick="location.href='/listings/${c.id}'">编辑资料 →</button>
+    </div>
+  `;
+}
+
+async function quickApprove(id) {
+  if (!confirm('确认通过此候选？')) return;
+  await api(`/api/v1/candidates/${id}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'approve', comment: '通过' }),
+  });
+  await loadCandidates();
+  selectedId = null;
+  document.getElementById('detail-pane').innerHTML = '<div class="detail-empty"><div class="detail-empty-icon">✓</div><div>已通过</div></div>';
+}
+
+async function quickReject(id) {
+  const reason = prompt('驳回原因（必填）：');
+  if (!reason) return;
+  await api(`/api/v1/candidates/${id}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'reject', reason_code: reason, comment: reason }),
+  });
+  await loadCandidates();
+  selectedId = null;
+}
+
+async function quickReturn(id) {
+  const reason = prompt('退回原因（必填）：');
+  if (!reason) return;
+  await api(`/api/v1/candidates/${id}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'return', reason_code: reason, comment: reason }),
+  });
+  await loadCandidates();
+  selectedId = null;
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadCandidates();
+setInterval(loadCandidates, 15000);
+
+document.getElementById('filter-text')?.addEventListener('input', render);
+document.getElementById('filter-status')?.addEventListener('change', loadCandidates);
+</script>
+</body>
+</html>

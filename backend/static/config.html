@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统配置 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .config-layout { display: flex; height: calc(100vh - 56px); }
+  .config-side { width: 200px; background: #fff; border-right: 1px solid #e5e7eb; padding: 12px 0; overflow-y: auto; }
+  .config-content { flex: 1; overflow-y: auto; padding: 24px 32px; background: #fafbfc; }
+
+  .config-side-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 16px; color: #4e5969;
+    cursor: pointer; font-size: 13px;
+    transition: all 0.1s;
+    border-left: 3px solid transparent;
+  }
+  .config-side-item:hover { background: #fafbfc; color: #1f2329; }
+  .config-side-item.active { background: #f0f5ff; color: #3370ff; border-left-color: #3370ff; }
+  .config-side-icon { font-size: 14px; width: 16px; text-align: center; }
+
+  .config-pane { display: none; }
+  .config-pane.active { display: block; }
+
+  .weight-row { margin-bottom: 16px; }
+  .weight-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .weight-row-label { font-size: 13px; color: #1f2329; }
+  .weight-row-value { font-size: 13px; font-weight: 600; font-family: monospace; }
+  .slider { width: 100%; height: 6px; -webkit-appearance: none; background: #e5e7eb; border-radius: 3px; outline: none; }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: #3370ff; border-radius: 50%; cursor: pointer; }
+  .slider::-moz-range-thumb { width: 16px; height: 16px; background: #3370ff; border-radius: 50%; cursor: pointer; border: none; }
+
+  .version-item {
+    border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px;
+    margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .version-item.active { background: #f0f5ff; border-color: #3370ff; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📊</span>业务看板
+    </a>
+    <a href="review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">✓</span>一审工作台
+      <span class="sidebar-item-badge" id="badge-first-review">0</span>
+    </a>
+    <a href="listings.html" class="sidebar-item">
+      <span class="sidebar-item-icon">📝</span>资料编辑
+    </a>
+    <a href="second-review.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔍</span>二审工作台
+    </a>
+    <a href="publish.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🚀</span>发布监控
+      <span class="sidebar-item-badge" id="badge-to-publish">0</span>
+    </a>
+
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔔</span>告警中心
+      <span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span>
+    </a>
+    <a href="config.html" class="sidebar-item active">
+      <span class="sidebar-item-icon">⚙️</span>系统配置
+    </a>
+    <a href="data-sources.html" class="sidebar-item">
+      <span class="sidebar-item-icon">🔌</span>数据源管理
+    </a>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div>
+        <div class="sidebar-user-name" id="user-name">--</div>
+        <div class="sidebar-user-role" id="user-role">--</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>运维</span>
+        <span style="margin:0 8px">/</span>
+        <span class="topbar-breadcrumb-current">系统配置</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search"><span>🔍</span><input type="text" placeholder="搜索配置" /></div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()">
+        <div class="topbar-user-avatar" id="topbar-avatar">A</div>
+      </div>
+    </header>
+
+    <div class="config-layout">
+      <div class="config-side">
+        <div class="config-side-item active" onclick="switchTab('scoring')">
+          <span class="config-side-icon">⚖️</span>评分模型
+        </div>
+        <div class="config-side-item" onclick="switchTab('dictionary')">
+          <span class="config-side-icon">📚</span>类目字典
+        </div>
+        <div class="config-side-item" onclick="switchTab('datasource')">
+          <span class="config-side-icon">🔌</span>数据源
+        </div>
+        <div class="config-side-item" onclick="switchTab('reviewer')">
+          <span class="config-side-icon">✓</span>审核策略
+        </div>
+      </div>
+
+      <div class="config-content">
+        <!-- 评分模型 -->
+        <div class="config-pane active" id="pane-scoring">
+          <div class="page-header" style="margin-bottom: 20px;">
+            <div>
+              <div class="page-title">评分模型</div>
+              <div class="page-subtitle">配置 6 维权重和推荐阈值 · 变更需激活版本生效</div>
+            </div>
+            <div class="page-actions">
+              <button class="btn btn-default" onclick="loadScoring()">↻ 重新加载</button>
+              <button class="btn btn-primary" onclick="saveScoring()">💾 保存为新版本</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">6 维权重（总和 = 100%）</div>
+              <div id="weight-status" class="tag">校验中...</div>
+            </div>
+            <div class="panel-body has-padding" id="weight-sliders"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">阈值</div>
+            </div>
+            <div class="panel-body has-padding" id="threshold-sliders"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">版本历史</div>
+            </div>
+            <div class="panel-body has-padding" id="version-list"></div>
+          </div>
+        </div>
+
+        <!-- 类目字典 -->
+        <div class="config-pane" id="pane-dictionary">
+          <div class="page-header" style="margin-bottom: 20px;">
+            <div>
+              <div class="page-title">类目字典</div>
+              <div class="page-subtitle">当前激活字典 + JSON 导入预览</div>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">当前字典</div>
+              </div>
+              <div class="panel-body has-padding" id="current-dict" style="max-height: 600px; overflow-y: auto;"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">导入新字典</div>
+                <div class="text-muted" style="font-size: 11px;">粘贴 JSON 格式</div>
+              </div>
+              <div class="panel-body has-padding">
+                <textarea id="dict-input" class="form-textarea" rows="10" placeholder='{"categories":[{"category_id":"PET-001","name":"宠物玩具","parent_id":"ROOT"}]}'></textarea>
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                  <button class="btn btn-default" onclick="previewDict()">🔍 预览 Diff</button>
+                  <button class="btn btn-primary" onclick="applyDict()">✓ 确认应用</button>
+                </div>
+                <div id="dict-preview" style="margin-top: 12px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 数据源 -->
+        <div class="config-pane" id="pane-datasource">
+          <div class="page-header" style="margin-bottom: 20px;">
+            <div>
+              <div class="page-title">数据源</div>
+              <div class="page-subtitle">管理所有候选来源（CSV / XLSX / HTTP API / 内部库）</div>
+            </div>
+            <div class="page-actions">
+              <button class="btn btn-primary" onclick="showAddSource()">+ 添加数据源</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>责任人</th>
+                    <th>授权说明</th>
+                    <th>状态</th>
+                    <th>配置</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="source-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 审核策略 -->
+        <div class="config-pane" id="pane-reviewer">
+          <div class="page-header" style="margin-bottom: 20px;">
+            <div>
+              <div class="page-title">一审/二审 同人校验策略</div>
+              <div class="page-subtitle">PRD §13 L19：建议 / 强制 / 允许 三种模式</div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-body has-padding" style="max-width: 720px;">
+              <div class="form-row">
+                <div class="form-label">同人模式</div>
+                <div style="flex: 1;">
+                  <label style="display: flex; align-items: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; margin-bottom: 8px;">
+                    <input type="radio" name="policy" value="suggested" checked style="margin-right: 8px;" />
+                    <div>
+                      <div style="font-weight: 500;">建议模式（默认）</div>
+                      <div style="font-size: 12px; color: #86909c;">同人允许通过，但记录事件标记。建议用于 MVP。</div>
+                    </div>
+                  </label>
+                  <label style="display: flex; align-items: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer; margin-bottom: 8px;">
+                    <input type="radio" name="policy" value="forced" style="margin-right: 8px;" />
+                    <div>
+                      <div style="font-weight: 500;">强制不同人</div>
+                      <div style="font-size: 12px; color: #86909c;">同人 → 403 拒绝。生产环境推荐。</div>
+                    </div>
+                  </label>
+                  <label style="display: flex; align-items: center; padding: 12px; border: 1px solid #e5e7eb; border-radius: 4px; cursor: pointer;">
+                    <input type="radio" name="policy" value="allowed" style="margin-right: 8px;" />
+                    <div>
+                      <div style="font-weight: 500;">完全允许</div>
+                      <div style="font-size: 12px; color: #86909c;">不记录同人事件（不推荐）。</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="savePolicy()">💾 保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+let currentScoring = null;
+let dictPreview = null;
+
+const DIM_NAMES = { heat: '市场热度', competition: '竞争程度', profit: '价格/利润', trend: '销量趋势', ratings: '评价质量', risk: '风险控制' };
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.config-side-item').forEach((el, i) => {
+    el.classList.toggle('active', el.textContent.trim().includes(['评分模型','类目字典','数据源','审核策略'][i] === ['评分模型','类目字典','数据源','审核策略'].find(x => document.querySelectorAll('.config-pane')[i]?.id.includes(t))));
+  });
+  // 简单版本
+  document.querySelectorAll('.config-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-' + t).classList.add('active');
+  document.querySelectorAll('.config-side-item').forEach(el => el.classList.remove('active'));
+  event.target.closest('.config-side-item').classList.add('active');
+
+  if (t === 'scoring') loadScoring();
+  if (t === 'dictionary') loadDict();
+  if (t === 'datasource') loadSources();
+}
+
+async function loadScoring() {
+  const cfg = await api('/api/v1/scoring-config/active');
+  currentScoring = cfg.definition || { weights: { heat: 0.25, competition: 0.2, profit: 0.2, trend: 0.2, ratings: 0.1, risk: 0.05 }, thresholds: { min_recommend_score: 75, category_quota_ratio: 0.4, target_count: 20 } };
+  renderScoring();
+  loadVersions();
+}
+
+function renderScoring() {
+  const ws = currentScoring.weights;
+  const ts = currentScoring.thresholds;
+
+  document.getElementById('weight-sliders').innerHTML = Object.keys(DIM_NAMES).map(dim => `
+    <div class="weight-row">
+      <div class="weight-row-head">
+        <span class="weight-row-label">${DIM_NAMES[dim]}</span>
+        <span class="weight-row-value" id="val-${dim}">${(ws[dim] * 100).toFixed(0)}%</span>
+      </div>
+      <input type="range" class="slider" min="0" max="0.5" step="0.01" value="${ws[dim]}" data-dim="${dim}" oninput="onWeightChange()" />
+    </div>
+  `).join('');
+
+  const THS = [
+    { k: 'min_recommend_score', l: '最低推荐分', min: 0, max: 100, step: 1 },
+    { k: 'category_quota_ratio', l: '类目占比上限', min: 0, max: 1, step: 0.05 },
+    { k: 'target_count', l: '每日推荐目标数', min: 1, max: 50, step: 1 },
+  ];
+  document.getElementById('threshold-sliders').innerHTML = THS.map(t => `
+    <div class="weight-row">
+      <div class="weight-row-head">
+        <span class="weight-row-label">${t.l}</span>
+        <span class="weight-row-value" id="val-${t.k}">${ts[t.k]}</span>
+      </div>
+      <input type="range" class="slider" min="${t.min}" max="${t.max}" step="${t.step}" value="${ts[t.k]}" data-th="${t.k}" oninput="document.getElementById('val-${t.k}').textContent = this.value" />
+    </div>
+  `).join('');
+
+  onWeightChange();
+}
+
+function onWeightChange() {
+  const weights = {};
+  let sum = 0;
+  document.querySelectorAll('[data-dim]').forEach(s => {
+    const v = parseFloat(s.value);
+    weights[s.dataset.dim] = v;
+    document.getElementById('val-' + s.dataset.dim).textContent = (v * 100).toFixed(0) + '%';
+    sum += v;
+  });
+  const valid = Math.abs(sum - 1.0) < 0.01;
+  document.getElementById('weight-status').className = 'tag ' + (valid ? 'tag-success' : 'tag-danger');
+  document.getElementById('weight-status').textContent = valid ? `✓ 总和 ${sum.toFixed(2)}` : `✗ 总和 ${sum.toFixed(2)}`;
+}
+
+async function saveScoring() {
+  const weights = {};
+  document.querySelectorAll('[data-dim]').forEach(s => weights[s.dataset.dim] = parseFloat(s.value));
+  const thresholds = {};
+  document.querySelectorAll('[data-th]').forEach(s => thresholds[s.dataset.key] = parseFloat(s.value));
+  await api('/api/v1/scoring-config', {
+    method: 'POST',
+    body: JSON.stringify({
+      weights, thresholds,
+      name: `v${new Date().toISOString().slice(0, 16).replace('T', '-')}`,
+    }),
+  });
+  await loadVersions();
+  alert('✓ 已保存草稿（请到下方版本历史点击「激活」）');
+}
+
+async function loadVersions() {
+  const versions = await api('/api/v1/scoring-config') || [];
+  document.getElementById('version-list').innerHTML = versions.length === 0
+    ? '<div class="text-muted">暂无版本</div>'
+    : versions.map(v => `
+      <div class="version-item ${v.is_active ? 'active' : ''}">
+        <div>
+          <div style="font-size: 13px; font-weight: 600;">
+            ${v.version}
+            ${v.is_active ? '<span class="tag tag-success" style="margin-left: 8px;">激活</span>' : ''}
+          </div>
+          <div style="font-size: 11px; color: #86909c; margin-top: 2px;">${new Date(v.created_at).toLocaleString('zh-CN')}</div>
+        </div>
+        ${!v.is_active ? `<button class="btn btn-text btn-sm" onclick="activateVersion(${v.id})">激活</button>` : ''}
+      </div>
+    `).join('');
+}
+
+async function activateVersion(id) {
+  if (!confirm('激活此版本？将立即生效。')) return;
+  await api(`/api/v1/scoring-config/${id}/activate`, { method: 'POST' });
+  await loadScoring();
+}
+
+async function loadDict() {
+  const dict = await api('/api/v1/categories/dict') || {};
+  const cats = dict.categories || [];
+  document.getElementById('current-dict').innerHTML = `
+    <div style="margin-bottom: 12px;">
+      <div style="font-size: 12px; color: #86909c;">版本</div>
+      <div style="font-size: 13px; font-weight: 500;">${dict.version || '-'}</div>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <div style="font-size: 12px; color: #86909c;">站点</div>
+      <div style="font-size: 13px;">${dict.site || '-'}</div>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <div style="font-size: 12px; color: #86909c;">类目数</div>
+      <div style="font-size: 13px;">${dict.count || cats.length}</div>
+    </div>
+    <div style="border-top: 1px solid #f0f1f3; padding-top: 12px;">
+      ${cats.length === 0 ? '<div class="text-muted">尚未导入</div>' :
+        cats.slice(0, 50).map(c => `
+          <div style="font-size: 12px; padding: 4px 0; font-family: monospace;">${c.category_id} <span style="color: #86909c;">${c.name || ''}</span></div>
+        `).join('')
+      }
+      ${cats.length > 50 ? `<div class="text-muted" style="margin-top: 8px;">... 共 ${cats.length} 个</div>` : ''}
+    </div>
+  `;
+}
+
+async function previewDict() {
+  const body = document.getElementById('dict-input').value.trim();
+  if (!body) { alert('请输入字典内容'); return; }
+  let new_dict;
+  try {
+    new_dict = JSON.parse(body);
+    if (new_dict.categories) new_dict = new_dict.categories;
+  } catch (e) {
+    document.getElementById('dict-preview').innerHTML = `<div class="tag tag-danger">JSON 解析失败: ${e.message}</div>`;
+    return;
+  }
+  const result = await api('/api/v1/categories/sync/preview', {
+    method: 'POST',
+    body: JSON.stringify({ site: 'us', new_dict }),
+  });
+  dictPreview = { new_dict, result };
+  const d = result.diff.summary;
+  document.getElementById('dict-preview').innerHTML = `
+    <div style="background: #f5f7fa; padding: 12px; border-radius: 4px;">
+      <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px;">Diff 预览</div>
+      <div style="display: flex; gap: 16px;">
+        <div><span style="color: #00b42a; font-weight: 600;">+${d.added_count}</span> 新增</div>
+        <div><span style="color: #ff7d00; font-weight: 600;">${d.modified_count}</span> 修改</div>
+        <div><span style="color: #f56565; font-weight: 600;">-${d.removed_count}</span> 删除</div>
+      </div>
+      <div style="font-size: 11px; color: #86909c; margin-top: 8px;">${result.auto_activate ? '✓ 小变更，将自动激活' : '⚠ 大变更，建议人工确认'}</div>
+    </div>
+  `;
+}
+
+async function applyDict() {
+  if (!dictPreview) { alert('请先预览'); return; }
+  if (!confirm('确认应用？将覆盖当前激活字典')) return;
+  await api('/api/v1/categories/sync/apply', {
+    method: 'POST',
+    body: JSON.stringify({ site: 'us', new_dict: dictPreview.new_dict }),
+  });
+  alert('✓ 已应用');
+  loadDict();
+}
+
+async function loadSources() {
+  const sources = await api('/api/v1/data-sources') || [];
+  const tbody = document.getElementById('source-tbody');
+  if (sources.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #86909c; padding: 32px;">暂无数据源</td></tr>';
+    return;
+  }
+  tbody.innerHTML = sources.map(s => `
+    <tr>
+      <td>${s.name}</td>
+      <td><span class="tag tag-default">${s.type}</span></td>
+      <td>${s.owner}</td>
+      <td class="text-muted">${s.authorization_note || '-'}</td>
+      <td><span class="tag ${s.is_active ? 'tag-success' : 'tag-default'}">${s.is_active ? '启用' : '停用'}</span></td>
+      <td><code style="font-size: 11px;">${JSON.stringify(s.config_ref).substring(0, 40)}...</code></td>
+      <td class="actions">
+        <a href="#" onclick="checkHealth('${s.id}')">健康检查</a>
+        <a href="#" onclick="deleteSource('${s.id}')">删除</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function showAddSource() {
+  const name = prompt('数据源名称（如：主商品库）:');
+  if (!name) return;
+  const type = prompt('类型（csv / xlsx / http_api）:', 'csv');
+  if (!type) return;
+  const owner = prompt('责任人:', user.username);
+  if (!owner) return;
+  const config = prompt('配置（JSON 格式，如 {\"file_path\":\"/data/p.csv\"}）:', '{"file_path":"/data/products.csv"}');
+  if (!config) return;
+
+  api('/api/v1/data-sources', {
+    method: 'POST',
+    body: JSON.stringify({
+      name, type, owner,
+      authorization_note: '内部使用，已授权',
+      config_ref: JSON.parse(config),
+    }),
+  }).then(() => {
+    alert('✓ 已添加');
+    loadSources();
+  });
+}
+
+async function checkHealth(id) {
+  const r = await api(`/api/v1/data-sources/${id}/health`);
+  alert(`${r.data_source_id.substring(0, 8)}...\n健康：${r.healthy ? '✓ 是' : '✗ 否'}\n${r.error || ''}`);
+}
+
+async function deleteSource(id) {
+  if (!confirm('确认删除此数据源？')) return;
+  alert('删除端点预留');
+}
+
+async function savePolicy() {
+  const policy = document.querySelector('input[name="policy"]:checked').value;
+  alert(`✓ 同人校验策略设为：${policy}\n（注意：实际生效需要在 config_versions 表保存 review_policy 类型）`);
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadScoring();
+setInterval(() => {
+  api('/api/v1/candidates?status=first_review&limit=1').then(c => {
+    document.getElementById('badge-first-review').textContent = c?.length || 0;
+  });
+}, 15000);
+</script>
+</body>
+</html>
