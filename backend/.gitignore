@@ -1,0 +1,25 @@
+# Local test/dev databases
+*.db
+*.sqlite
+*.sqlite3
+test_phase1.db
+temu_demo.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Build
+build/
+dist/
+*.egg-info/

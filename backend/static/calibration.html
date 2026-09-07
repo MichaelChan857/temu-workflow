@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模型校准 - Temu Workflow</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .cal-layout { display: flex; height: calc(100vh - 56px); }
+  .cal-side { width: 240px; background: #fff; border-right: 1px solid #e5e7eb; padding: 12px 0; overflow-y: auto; }
+  .cal-content { flex: 1; overflow-y: auto; padding: 24px 32px; background: #fafbfc; }
+
+  .cal-side-item { padding: 10px 16px; color: #4e5969; cursor: pointer; font-size: 13px;
+    border-left: 3px solid transparent; transition: all 0.1s; }
+  .cal-side-item:hover { background: #fafbfc; color: #1f2329; }
+  .cal-side-item.active { background: #f0f5ff; color: #3370ff; border-left-color: #3370ff; }
+
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 20px 24px; margin-bottom: 16px; }
+  .panel-title { font-size: 15px; font-weight: 600; color: #1f2329; margin-bottom: 12px; }
+
+  .dim-row { display: grid; grid-template-columns: 100px 1fr 80px; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px dashed #f0f0f0; }
+  .dim-row:last-child { border-bottom: none; }
+  .dim-label { font-size: 13px; color: #4e5969; }
+  .dim-bar-wrap { background: #f5f7fa; border-radius: 3px; height: 8px; position: relative; overflow: hidden; }
+  .dim-bar-pos { background: #00b42a; height: 100%; }
+  .dim-bar-neg { background: #f56565; height: 100%; margin-left: 50%; }
+  .dim-val { font-family: monospace; font-size: 13px; text-align: right; }
+
+  table.recommend-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.recommend-table th, table.recommend-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+  table.recommend-table th { background: #fafbfc; color: #4e5969; font-weight: 600; }
+  .arrow-up { color: #00b42a; font-family: monospace; }
+  .arrow-down { color: #f56565; font-family: monospace; }
+  .arrow-flat { color: #86909c; font-family: monospace; }
+
+  .action-bar { display: flex; gap: 12px; margin-top: 12px; }
+  .empty-state { padding: 32px; text-align: center; color: #86909c; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-icon">T</div>
+      <div>
+        <div class="sidebar-brand-title">Temu Workflow</div>
+        <div class="sidebar-brand-sub">自动选品与上品</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">主要功能</div>
+    <a href="dashboard.html" class="sidebar-item"><span class="sidebar-item-icon">📊</span>业务看板</a>
+    <a href="review.html" class="sidebar-item"><span class="sidebar-item-icon">✓</span>一审工作台<span class="sidebar-item-badge" id="badge-first-review">0</span></a>
+    <a href="listings.html" class="sidebar-item"><span class="sidebar-item-icon">📝</span>资料编辑</a>
+    <a href="second-review.html" class="sidebar-item"><span class="sidebar-item-icon">🔍</span>二审工作台</a>
+    <a href="publish.html" class="sidebar-item"><span class="sidebar-item-icon">🚀</span>发布监控<span class="sidebar-item-badge" id="badge-to-publish">0</span></a>
+
+    <div class="sidebar-section">V2.0 业务闭环</div>
+    <a href="calibration.html" class="sidebar-item active"><span class="sidebar-item-icon">📈</span>模型校准</a>
+
+    <div class="sidebar-section">运维</div>
+    <a href="alerts.html" class="sidebar-item"><span class="sidebar-item-icon">🔔</span>告警中心<span class="sidebar-item-badge" id="badge-alerts" style="background:#ff7d00">0</span></a>
+    <a href="config.html" class="sidebar-item"><span class="sidebar-item-icon">⚙️</span>系统配置</a>
+    <a href="data-sources.html" class="sidebar-item"><span class="sidebar-item-icon">🔌</span>数据源管理</a>
+
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar" id="user-avatar">A</div>
+      <div>
+        <div class="sidebar-user-name" id="user-name">--</div>
+        <div class="sidebar-user-role" id="user-role">--</div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <span>V2.0 业务闭环</span>
+        <span style="margin:0 8px">/</span>
+        <span class="topbar-breadcrumb-current">模型校准</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-search"><span>🔍</span><input type="text" placeholder="搜索报告" /></div>
+      <div class="topbar-icon" onclick="location.href='alerts.html'">🔔<span class="topbar-badge" id="topbar-alert-badge">0</span></div>
+      <div class="topbar-user" onclick="logout()">
+        <div class="topbar-user-avatar" id="topbar-avatar">A</div>
+      </div>
+    </header>
+
+    <div class="cal-layout">
+      <div class="cal-side">
+        <div style="padding:0 16px 8px; font-size:12px; color:#86909c;">历史报告</div>
+        <div id="report-list"><div class="empty-state">加载中…</div></div>
+        <div style="padding:12px 16px 0; border-top:1px solid #e5e7eb; margin-top:8px;">
+          <button class="btn btn-default" style="width:100%;" onclick="runCalibration()">▶ 跑一次校准</button>
+          <button class="btn btn-default" style="width:100%; margin-top:8px;" onclick="generateWeekly()">📅 生成周报</button>
+        </div>
+      </div>
+
+      <div class="cal-content">
+        <div class="panel">
+          <div class="panel-title">📊 最新 Drift 报告</div>
+          <div id="latest-meta" style="font-size:13px; color:#4e5969; margin-bottom:16px;"></div>
+          <div id="dim-bars"><div class="empty-state">暂无数据，点击左侧"跑一次校准"</div></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">⚙️ 推荐权重调整</div>
+          <div id="recommend-table-wrap"></div>
+          <div class="action-bar" id="action-bar">
+            <button class="btn btn-primary" onclick="applyReport()">✓ Apply（创建草稿）</button>
+            <button class="btn btn-default" onclick="ignoreReport()">✕ Ignore</button>
+            <a class="btn btn-default" href="config.html">→ 去评分配置激活</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = null;
+let user = null;
+let currentReport = null;
+
+async function api(path, opts = {}) {
+  if (!token) { window.location.href = '/ui/login.html'; return; }
+  const r = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) },
+  });
+  if (r.status === 401) { logout(); return; }
+  return r.json();
+}
+
+function logout() { localStorage.clear(); window.location.href = '/ui/login.html'; }
+
+function fillUser() {
+  const raw = localStorage.getItem('temu_user');
+  if (!raw) { window.location.href = '/ui/login.html'; return; }
+  user = JSON.parse(raw);
+  document.getElementById('user-name').textContent = user.display_name;
+  document.getElementById('user-role').textContent = user.role;
+  document.getElementById('user-avatar').textContent = user.display_name[0] || 'U';
+  document.getElementById('topbar-avatar').textContent = user.display_name[0] || 'U';
+}
+
+async function loadReports() {
+  const reports = await api('/api/v1/drift/reports?limit=20');
+  if (!reports || !reports.length) {
+    document.getElementById('report-list').innerHTML = '<div class="empty-state">暂无报告</div>';
+    return;
+  }
+  const html = reports.map(r => {
+    const dt = new Date(r.evaluated_at);
+    const statusTag = {
+      'generated': '<span class="tag tag-primary">待审核</span>',
+      'applied': '<span class="tag tag-success">已应用</span>',
+      'ignored': '<span class="tag tag-default">已忽略</span>',
+    }[r.status] || r.status;
+    return `
+      <div class="cal-side-item" onclick="loadReport(${r.id})" id="rpt-${r.id}">
+        <div style="font-size:13px;">#${r.id} ${r.window_start}..${r.window_end}</div>
+        <div style="font-size:11px; color:#86909c; margin-top:2px;">
+          样本 ${r.sample_size} · cal_err=${r.calibration_error ?? '—'} · ${statusTag}
+        </div>
+      </div>`;
+  }).join('');
+  document.getElementById('report-list').innerHTML = html;
+  // 默认展开最新
+  if (reports.length > 0) loadReport(reports[0].id);
+}
+
+async function loadReport(id) {
+  const r = await api(`/api/v1/drift/reports/${id}`);
+  if (!r) return;
+  currentReport = r;
+  // 高亮选中
+  document.querySelectorAll('[id^="rpt-"]').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`rpt-${id}`);
+  if (el) el.classList.add('active');
+
+  // Meta
+  document.getElementById('latest-meta').innerHTML = `
+    <strong>报告 #${r.id}</strong> · 窗口 ${r.window_start}..${r.window_end} · 样本 ${r.sample_size} ·
+    预测 ${r.predicted_score_avg ?? '—'} → 实现 ${r.realized_score_avg ?? '—'} ·
+    校准误差 <strong style="color:${(r.calibration_error ?? 0) >= 0 ? '#00b42a' : '#f56565'};">
+      ${r.calibration_error !== null ? (r.calibration_error >= 0 ? '+' : '') + r.calibration_error : '—'}
+    </strong> · 状态 ${r.status}
+  `;
+
+  // Dimension bars
+  const dims = ['heat', 'competition', 'profit', 'trend', 'ratings', 'risk'];
+  const max = 50;  // 显示范围 ±50
+  const bars = dims.map(d => {
+    const v = r.dimension_errors_json[d] ?? 0;
+    const pct = Math.min(Math.abs(v) / max * 50, 50);
+    const isPos = v >= 0;
+    return `
+      <div class="dim-row">
+        <div class="dim-label">${d}</div>
+        <div class="dim-bar-wrap">
+          ${isPos
+            ? `<div class="dim-bar-pos" style="width:${pct}%; margin-left:50%;"></div>`
+            : `<div class="dim-bar-neg" style="width:${pct}%; margin-left:${50 - pct}%;"></div>`}
+          <div style="position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:#e5e7eb;"></div>
+        </div>
+        <div class="dim-val" style="color:${isPos ? '#00b42a' : '#f56565'};">
+          ${isPos ? '+' : ''}${v.toFixed(2)}
+        </div>
+      </div>`;
+  }).join('');
+  document.getElementById('dim-bars').innerHTML = bars;
+
+  // Recommend table
+  if (Object.keys(r.recommended_weight_adjustments_json || {}).length === 0) {
+    document.getElementById('recommend-table-wrap').innerHTML =
+      '<div class="empty-state">无推荐权重（样本不足或全部无偏）</div>';
+  } else {
+    const rows = dims.map(d => {
+      const cur = 0.20;  // TODO: 显示当前激活权重（需 /scoring-config/active）
+      const rec = r.recommended_weight_adjustments_json[d] ?? cur;
+      const diff = rec - cur;
+      const arrow = diff > 0.0001 ? '↑' : diff < -0.0001 ? '↓' : '·';
+      const cls = diff > 0.0001 ? 'arrow-up' : diff < -0.0001 ? 'arrow-down' : 'arrow-flat';
+      return `
+        <tr>
+          <td>${d}</td>
+          <td style="font-family:monospace;">${cur.toFixed(4)}</td>
+          <td style="font-family:monospace;">${rec.toFixed(4)}</td>
+          <td class="${cls}">${arrow} ${diff >= 0 ? '+' : ''}${diff.toFixed(4)}</td>
+        </tr>`;
+    }).join('');
+    document.getElementById('recommend-table-wrap').innerHTML = `
+      <table class="recommend-table">
+        <thead><tr><th>维度</th><th>当前权重</th><th>推荐权重</th><th>差值</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // 禁用按钮（如果状态已变更）
+  const isActionable = r.status === 'generated' && Object.keys(r.recommended_weight_adjustments_json || {}).length > 0;
+  const btns = document.querySelectorAll('#action-bar button');
+  btns.forEach(b => b.disabled = !isActionable);
+}
+
+async function runCalibration() {
+  const r = await api('/api/v1/drift/calibrate?window_days=30', { method: 'POST' });
+  if (r) {
+    alert(`校准完成：drift_id=${r.drift_id}, 样本=${r.sample_size}`);
+    loadReports();
+  }
+}
+
+async function generateWeekly() {
+  const r = await api('/api/v1/drift/weekly-report', { method: 'POST' });
+  if (r) { alert(`周报已生成 #${r.id}`); loadReports(); }
+}
+
+async function applyReport() {
+  if (!currentReport) return;
+  if (!confirm(`确定将 drift #${currentReport.id} 的推荐权重创建为评分配置草稿？\n（注：仅创建草稿，不自动激活）`)) return;
+  const r = await api(`/api/v1/drift/reports/${currentReport.id}/apply`, { method: 'POST' });
+  if (r) {
+    alert(`✓ 草稿已创建\n\n版本：${r.config_version}\nid：${r.config_id}\n\n请到 系统配置 → 评分模型 手动激活`);
+    loadReports();
+  }
+}
+
+async function ignoreReport() {
+  if (!currentReport) return;
+  if (!confirm(`确定忽略 drift #${currentReport.id}？`)) return;
+  const r = await api(`/api/v1/drift/reports/${currentReport.id}/ignore`, { method: 'POST' });
+  if (r) { loadReports(); }
+}
+
+fillUser();
+token = localStorage.getItem('temu_token');
+loadReports();
+setInterval(loadReports, 15000);
+</script>
+</body>
+</html>
