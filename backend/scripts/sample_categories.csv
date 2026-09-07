@@ -1,0 +1,12 @@
+category_id,name,parent_id,attribute_key,attribute_type
+PHN-001,Phone Accessories > Cases,PHN-ROOT,color,enum
+PHN-001,Phone Accessories > Cases,PHN-ROOT,material,enum
+PHN-002,Phone Accessories > Chargers,PHN-ROOT,power_w,number
+KIT-001,Kitchen > Utensils,KIT-ROOT,material,enum
+KIT-002,Kitchen > Storage,KIT-ROOT,capacity_ml,number
+PET-001,Pet > Toys,PET-ROOT,pet_size,enum
+PET-002,Pet > Accessories,PET-ROOT,pet_size,enum
+HOM-001,Home > Lighting,HOM-ROOT,wattage,number
+HOM-001,Home > Lighting,HOM-ROOT,color_temp,enum
+FIT-001,Fitness > Equipment,FIT-ROOT,resistance,number
+FIT-002,Fitness > Yoga,FIT-ROOT,material,enum
