@@ -1,0 +1,171 @@
+{
+  "name": "Temu 选品工作流 v1",
+  "id": "temu-selection-daily-v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{}]
+        },
+        "interval": 86400,
+        "type": "interval",
+        "options": {
+          "timezone": "Asia/Shanghai"
+        }
+      },
+      "id": "trigger-cron",
+      "name": "每天 06:00 触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileFormat": "csv",
+        "filePath": "/home/node/.n8n/imports/daily_sample.csv"
+      },
+      "id": "read-csv",
+      "name": "读当日 CSV",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// 把 CSV 文本拆成行，每行转成 JSON 对象\nconst lines = items[0].json.data.split('\\n').filter(l => l.trim());\nconst headers = lines[0].split(',');\nconst candidates = [];\nfor (let i = 1; i < lines.length; i++) {\n  const cols = lines[i].split(',');\n  const obj = {};\n  for (let j = 0; j < headers.length; j++) {\n    obj[headers[j].trim()] = cols[j] ? cols[j].trim() : null;\n  }\n  // 转换数字\n  if (obj.price) obj.price = parseFloat(obj.price);\n  if (obj.cost) obj.cost = parseFloat(obj.cost);\n  if (obj.weight_g) obj.weight_g = parseInt(obj.weight_g);\n  // 拼 image_urls\n  obj.image_urls = [];\n  for (let n = 1; n <= 3; n++) {\n    if (obj[`image_url_${n}`]) obj.image_urls.push(obj[`image_url_${n}`]);\n    delete obj[`image_url_${n}`];\n  }\n  candidates.push(obj);\n}\nreturn [{ json: { candidates, source: 'csv_daily', candidate_count: candidates.length } }];"
+      },
+      "id": "parse-csv",
+      "name": "解析 CSV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/v1/import/json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $env.N8N_BACKEND_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "candidates", "value": "={{ $json.candidates }}" },
+            { "name": "source", "value": "={{ $json.source }}" }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "call-backend",
+      "name": "推送到后端",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.recommended }}",
+              "rightValue": 20,
+              "operator": { "type": "number", "operation": "lt" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-count",
+      "name": "候选不足？",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/v1/alerts/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $env.N8N_BACKEND_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "level", "value": "warning" },
+            { "name": "title", "value": "Temu 候选不足" },
+            { "name": "message", "value": "={{ '今日推荐 ' + $json.recommended + ' 个，少于默认 20 个' }}" }
+          ]
+        }
+      },
+      "id": "alert",
+      "name": "发送告警",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/v1/notifications/first-review-ready",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Authorization", "value": "Bearer {{ $env.N8N_BACKEND_TOKEN }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "batch_id", "value": "={{ $json.batch_id }}" },
+            { "name": "recommended_count", "value": "={{ $json.recommended }}" }
+          ]
+        }
+      },
+      "id": "notify-reviewers",
+      "name": "通知一审",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 400]
+    }
+  ],
+  "connections": {
+    "每天 06:00 触发": { "main": [[{ "node": "读当日 CSV", "type": "main", "index": 0 }]] },
+    "读当日 CSV": { "main": [[{ "node": "解析 CSV", "type": "main", "index": 0 }]] },
+    "解析 CSV": { "main": [[{ "node": "推送到后端", "type": "main", "index": 0 }]] },
+    "推送到后端": { "main": [[{ "node": "候选不足？", "type": "main", "index": 0 }]] },
+    "候选不足？": {
+      "main": [
+        [{ "node": "发送告警", "type": "main", "index": 0 }],
+        [{ "node": "通知一审", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "staticData": null,
+  "tags": [{ "name": "temu" }, { "name": "daily" }],
+  "triggerCount": 0,
+  "updatedAt": "2026-09-02T13:00:00.000Z",
+  "createdAt": "2026-09-02T13:00:00.000Z"
+}
