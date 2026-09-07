@@ -1,0 +1,4 @@
+-- 创建 n8n 数据库
+CREATE DATABASE n8n;
+\c n8n
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

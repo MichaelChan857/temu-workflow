@@ -1,0 +1,145 @@
+version: "3.9"
+
+# Temu Workflow MVP — 一键起整套技术栈
+# 用法：
+#   docker compose up -d          # 启动
+#   docker compose down -v        # 清理（含数据卷）
+#   docker compose logs -f backend
+
+services:
+  # ============== 数据库 ==============
+  postgres:
+    image: postgres:17-alpine
+    container_name: temu-postgres
+    environment:
+      POSTGRES_DB: temu_workflow
+      POSTGRES_USER: temu
+      POSTGRES_PASSWORD: temu_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temu -d temu_workflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============== 缓存/队列 ==============
+  redis:
+    image: redis:7-alpine
+    container_name: temu-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============== 后端 API ==============
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: temu-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://temu:temu_dev_only@postgres:5432/temu_workflow
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production
+      TEMU_API_BASE: http://temu-adapter:8001
+      TEMU_API_KEY: mock_key_for_dev
+      TEMU_USE_MOCK: "true"
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5678
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temu-adapter:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ============== Temu 适配器（独立微服务）==============
+  temu-adapter:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: temu-adapter
+    environment:
+      TEMU_USE_MOCK: "true"
+      TEMU_PARTNER_BASE: https://partner.temu.com/api
+      TEMU_APP_KEY: mock_app_key
+      TEMU_APP_SECRET: mock_app_secret
+      TEMU_ACCESS_TOKEN: mock_access_token
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.adapters.temu_server:app --host 0.0.0.0 --port 8001 --reload
+
+  # ============== n8n ==============
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: temu-n8n
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: temu
+      DB_POSTGRESDB_PASSWORD: temu_dev_only
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: Asia/Shanghai
+      EXECUTIONS_MODE: regular
+      N8N_LOG_LEVEL: debug
+      N8N_MULTI_MAIN_SETUP_ENABLED: "false"
+      # Workflow 调后端用的 JWT（admin 用户登录后获得）
+      # 默认用 admin123 登录拿到的 token，需与 backend SECRET_KEY 匹配
+      # 真生产应改用独立 service account + 长效 token
+      N8N_BACKEND_TOKEN: ${N8N_BACKEND_TOKEN:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NTkwYTMwNi03NjZmLTQ0ZDgtYmVlMC05ODMyYjlhZTlmZTUiLCJyb2xlIjoiYWRtaW4iLCJzaG9wX2lkIjoiMTYxYTU0MDMtYTMyYS00ZmQ5LTkzY2QtNzhjYjY4NDgyMTg3IiwiaWF0IjoxNzg4NTY1MDI3LCJleHAiOjE3ODg1OTM4Mjd9.iiI3NtDPJ7JBkInR7F-mg2FTTulu_4CEeqmzNDc19qw}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/.n8n/workflows:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ============== 前端 ==============
+  frontend:
+    image: node:20-alpine
+    container_name: temu-frontend
+    working_dir: /app
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_TEMU_API: http://localhost:8001
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  redis_data:
+  n8n_data:
+  backend_uploads:
+  frontend_node_modules:
